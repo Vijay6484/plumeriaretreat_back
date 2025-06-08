@@ -10,7 +10,7 @@ const app = express();
 const PORT = process.env.PORT || 8080;
 
 // Middleware
-app.use(cors());
+app.use(cors({origin:'http://localhost:5173'}));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use((req, res, next) => {
@@ -20,22 +20,22 @@ app.use((req, res, next) => {
 
 
 // Database connection
-// const dbConfig = {
-//   host: process.env.DB_HOST || 'mysql.railway.internal',
-//   user: process.env.DB_USER || 'root',
-//   password: process.env.DB_PASSWORD || 'XuzzPuWFCRujAWxdWZTSwVBFVKdnNnJT',
-//   database: process.env.DB_NAME || 'railway',
-//   waitForConnections: true,
-//   connectionLimit: 10,
-//   queueLimit: 0
-// };
-
 const dbConfig = {
-  host: 'localhost',
-  user: 'root',
-  password: '2005',
-  database: 'plumeria_retreat',
+  host: process.env.DB_HOST || 'mysql.railway.internal',
+  user: process.env.DB_USER || 'root',
+  password: process.env.DB_PASSWORD || 'XuzzPuWFCRujAWxdWZTSwVBFVKdnNnJT',
+  database: process.env.DB_NAME || 'railway',
+  waitForConnections: true,
+  connectionLimit: 10,
+  queueLimit: 0
 };
+
+// const dbConfig = {
+//   host: 'localhost',
+//   user: 'root',
+//   password: '2005',
+//   database: 'plumeria_retreat',
+// };
 
 const pool = mysql.createPool(dbConfig);
 async function testConnection() {
