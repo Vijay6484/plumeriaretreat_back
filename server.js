@@ -11,12 +11,16 @@ const PORT = process.env.PORT || 3001;
 
 // Middleware
 app.use(cors({
-  origin: 'https://plumeriaretreat.vercel.app',
+  origin: [
+    'https://plumeriaretreat.vercel.app',
+    'http://localhost:5173',
+    'http://localhost:5174'
+  ],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true
 }));
-app.options('*', cors());
+// app.options('*', cors());
 
 app.use(express.json());
 
@@ -26,8 +30,15 @@ const dbConfig = {
   user: process.env.DB_USER || 'u973488458_plumeria',
   password: process.env.DB_PASSWORD || 'Plumeria_retreat1234',
   database: process.env.DB_NAME || 'u973488458_plumeria',
-  port: parseInt(process.env.DB_PORT || '3307')
+  port: parseInt(process.env.DB_PORT || '3306')
 };
+// const dbConfig={
+//   host: 'localhost',
+//   user: 'root',
+//   password: '2005',
+//   database: 'camping_retreat',
+//   port: 3306
+// }
 
 // Create database connection pool
 const pool = mysql.createPool({
