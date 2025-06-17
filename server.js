@@ -20,7 +20,7 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true
 }));
-// app.options('*', cors());
+// app.options('/*', cors());
 
 app.use(express.json());
 
@@ -64,6 +64,11 @@ async function executeQuery(query, params = []) {
 // Get all navigation items
 app.get('/api/nav-items', async (req, res) => {
   try {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+  if (req.method === 'OPTIONS') {
+    res.status(200).end();
+    return;
+  }
     const results = await executeQuery('SELECT label, path FROM nav_items ORDER BY id');
     res.json(results);
   } catch (error) {
@@ -74,6 +79,11 @@ app.get('/api/nav-items', async (req, res) => {
 // Get all accommodations with packages
 app.get('/api/accommodations', async (req, res) => {
   try {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+  if (req.method === 'OPTIONS') {
+    res.status(200).end();
+    return;
+  }
     const accommodations = await executeQuery(`
       SELECT *
       FROM accommodations 
@@ -100,6 +110,11 @@ app.get('/api/accommodations', async (req, res) => {
 // Get all meal plans
 app.get('/api/meal-plans', async (req, res) => {
   try {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+  if (req.method === 'OPTIONS') {
+    res.status(200).end();
+    return;
+  }
     const results = await executeQuery(`
       SELECT id, type, title, description, price, includes 
       FROM meal_plans 
@@ -114,6 +129,11 @@ app.get('/api/meal-plans', async (req, res) => {
 // Get all activities
 app.get('/api/activities', async (req, res) => {
   try {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+  if (req.method === 'OPTIONS') {
+    res.status(200).end();
+    return;
+  }
     const results = await executeQuery(`
       SELECT id, title, description, price, image, duration 
       FROM activities 
@@ -128,6 +148,11 @@ app.get('/api/activities', async (req, res) => {
 // Get all FAQs
 app.get('/api/faqs', async (req, res) => {
   try {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+  if (req.method === 'OPTIONS') {
+    res.status(200).end();
+    return;
+  }
     const results = await executeQuery(`
       SELECT id, question, answer 
       FROM faqs 
@@ -142,6 +167,11 @@ app.get('/api/faqs', async (req, res) => {
 // Get all gallery images
 app.get('/api/gallery-images', async (req, res) => {
   try {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+  if (req.method === 'OPTIONS') {
+    res.status(200).end();
+    return;
+  }
     const results = await executeQuery(`
       SELECT id, src, alt, category, width, height 
       FROM gallery_images 
@@ -156,6 +186,11 @@ app.get('/api/gallery-images', async (req, res) => {
 // Get all testimonials
 app.get('/api/testimonials', async (req, res) => {
   try {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+  if (req.method === 'OPTIONS') {
+    res.status(200).end();
+    return;
+  }
     const results = await executeQuery(`
       SELECT id, name, location, image, rating, text 
       FROM testimonials 
@@ -170,6 +205,11 @@ app.get('/api/testimonials', async (req, res) => {
 // Get all nearby locations
 app.get('/api/nearby-locations', async (req, res) => {
   try {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+  if (req.method === 'OPTIONS') {
+    res.status(200).end();
+    return;
+  }
     const results = await executeQuery(`
       SELECT id, name, distance, image, description 
       FROM nearby_locations 
@@ -183,6 +223,11 @@ app.get('/api/nearby-locations', async (req, res) => {
 
 // Get all packages
 app.get('/api/packages', async (req, res) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  if (req.method === 'OPTIONS') {
+    res.status(200).end();
+    return;
+  }
   const accommodationId = parseInt(req.query.accommodation);
   const pkgId = parseInt(req.query.package);
   // If both query params are present, fetch the specific package
@@ -239,6 +284,11 @@ app.get('/api/packages', async (req, res) => {
 
 // Get all data in one endpoint (for the single page frontend)
 app.get('/api/all-data', async (req, res) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  if (req.method === 'OPTIONS') {
+    res.status(200).end();
+    return;
+  }
   try {
     const [
       navItems,
@@ -305,6 +355,11 @@ app.get('/api/all-data', async (req, res) => {
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  if (req.method === 'OPTIONS') {
+    res.status(200).end();
+    return;
+  }
   res.json({ status: 'OK', timestamp: new Date().toISOString() });
 });
 
@@ -317,6 +372,11 @@ app.listen(PORT, () => {
 // Get a single accommodation by ID
 app.get('/api/accommodations/:id', async (req, res) => {
   try {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+  if (req.method === 'OPTIONS') {
+    res.status(200).end();
+    return;
+  }
     const id = req.params.id;
     const results = await executeQuery(
       `SELECT 
@@ -354,6 +414,11 @@ app.get('/api/accommodations/:id', async (req, res) => {
 
 // Get a single package by combined id (e.g. 102)
 app.get('/api/packages/:combinedId', async (req, res) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  if (req.method === 'OPTIONS') {
+    res.status(200).end();
+    return;
+  }
   const { combinedId } = req.params;
   const splitIdx = combinedId.indexOf('0');
   if (splitIdx < 1) return res.status(400).json({ error: 'Invalid package id format' });
@@ -373,6 +438,11 @@ app.get('/api/packages/:combinedId', async (req, res) => {
 
 // Get all images from all relevant tables
 app.get('/api/all-images', async (req, res) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  if (req.method === 'OPTIONS') {
+    res.status(200).end();
+    return;
+  }
   try {
     // Gallery images
     const galleryImages = await executeQuery(
@@ -417,6 +487,11 @@ app.get('/api/all-images', async (req, res) => {
 
 // Create a booking
 app.post('/api/bookings', async (req, res) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  if (req.method === 'OPTIONS') {
+    res.status(200).end();
+    return;
+  }
   const {
     package_id, accommodation_id, guest_name, guest_email, guest_phone,
     rooms, adults, children, food_veg, food_nonveg, food_jain,
@@ -438,6 +513,11 @@ app.post('/api/bookings', async (req, res) => {
 
 // PayU payment initiation
 app.post('/api/payments/payu', async (req, res) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  if (req.method === 'OPTIONS') {
+    res.status(200).end();
+    return;
+  }
   const {
     amount, firstname, email, phone, productinfo, booking_id, surl, furl
   } = req.body;
