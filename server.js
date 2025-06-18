@@ -13,6 +13,7 @@ const PORT = process.env.PORT || 3001;
 app.use(cors({
   origin: [
     'https://plumeriaretreat.vercel.app',
+    'https://plumeriaretreat.com/',
     'http://localhost:5173',
     'http://localhost:5174'
   ],
@@ -580,5 +581,9 @@ app.post('/api/payments/payu', async (req, res) => {
     payuData
   });
 });
+
+app.listen(PORT, ()=>{
+  console.log("server started at 5000")
+}
 
 export default app;
