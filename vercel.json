@@ -6,6 +6,9 @@
       "use": "@vercel/node"
     }
   ],
+  "scripts": {
+    "start": "node server.js"
+  },
   "routes": [
     {
       "src": "/(.*)",
