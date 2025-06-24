@@ -582,8 +582,9 @@ app.post('/api/payments/payu', async (req, res) => {
   });
 });
 
+
 app.listen(PORT, ()=>{
-  console.log("server started at 5000")
-}
+  console.log(`server started at ${PORT}`);
+})
 
 export default app;
