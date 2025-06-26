@@ -11,12 +11,6 @@ const PORT = process.env.PORT || 3001;
 
 // Middleware
 app.use(cors({
-  origin: [
-    'https://plumeriaretreat.vercel.app',
-    'https://plumeriaretreat.com/',
-    'http://localhost:5173',
-    'http://localhost:5174'
-  ],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true
@@ -105,6 +99,47 @@ app.get('/api/accommodations', async (req, res) => {
     res.json(accommodations);
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch accommodations' });
+  }
+});
+
+app.get('/api/accommodations/:id', async (req, res) => {
+  try {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    if (req.method === 'OPTIONS') {
+      res.status(200).end();
+      return;
+    }
+
+    const accommodationId = req.params.id;
+    console.log('Fetching accommodation with ID:', accommodationId);
+    if (!accommodationId) {
+      return res.status(400).json({ error: 'Accommodation ID is required' });
+    }
+
+    const accommodationResults = await executeQuery(
+      `SELECT * FROM accommodations WHERE id = ?`, [accommodationId]
+    );
+
+    console.log('Accommodation results:', accommodationResults);
+
+    if (!accommodationResults || accommodationResults.length === 0) {
+      return res.status(404).json({ error: 'Accommodation not found' });
+    }
+
+    const accommodation = accommodationResults[0];
+
+    // Fetch active packages for this accommodation
+    const packages = await executeQuery(
+      `SELECT * FROM packages WHERE accommodation_id = ? AND active = 1`,
+      [accommodation.id]
+    );
+
+    accommodation.packages = packages;
+
+    res.json(accommodation);
+  } catch (error) {
+    console.error('Error fetching accommodation by ID:', error);
+    res.status(500).json({ error: 'Failed to fetch accommodation details' });
   }
 });
 
