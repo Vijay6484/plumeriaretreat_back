@@ -234,8 +234,8 @@ app.get('/api/packages', async (req, res) => {
       );
       if (!pkg) return res.status(404).json({ error: 'Package not found' });
 
-      if (typeof pkg.includes === 'string') try { pkg.includes = JSON.parse(pkg.includes); } catch {}
-      if (typeof pkg.detailed_info === 'string') try { pkg.detailed_info = JSON.parse(pkg.detailed_info); } catch {}
+      if (typeof pkg.includes === 'string') try { pkg.includes = JSON.parse(pkg.includes); } catch { }
+      if (typeof pkg.detailed_info === 'string') try { pkg.detailed_info = JSON.parse(pkg.detailed_info); } catch { }
 
       res.json(pkg);
     } catch (error) {
@@ -251,14 +251,26 @@ app.get('/api/packages', async (req, res) => {
     `, [], req.db);
 
     for (const pkg of results) {
-      if (typeof pkg.includes === 'string') try { pkg.includes = JSON.parse(pkg.includes); } catch {}
-      if (typeof pkg.detailedInfo === 'string') try { pkg.detailedInfo = JSON.parse(pkg.detailedInfo); } catch {}
+      if (typeof pkg.includes === 'string') try { pkg.includes = JSON.parse(pkg.includes); } catch { }
+      if (typeof pkg.detailedInfo === 'string') try { pkg.detailedInfo = JSON.parse(pkg.detailedInfo); } catch { }
     }
     res.json(results);
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch packages' });
   }
 });
+
+/**
+ * Helper to replace undefined with null in booking data,
+ * because MySQL doesn't accept undefined bind parameters.
+ */
+function sanitizeBookingData(data) {
+  const sanitized = {};
+  for (const [key, value] of Object.entries(data)) {
+    sanitized[key] = value === undefined ? null : value;
+  }
+  return sanitized;
+}
 
 app.post('/api/bookings', async (req, res) => {
   const {
@@ -267,12 +279,35 @@ app.post('/api/bookings', async (req, res) => {
     check_in, check_out, total_amount, advance_amount
   } = req.body;
 
+  // Sanitize booking data to convert undefined -> null
+  const bookingData = sanitizeBookingData({
+    package_id, accommodation_id, guest_name, guest_email, guest_phone,
+    rooms, adults, children, food_veg, food_nonveg, food_jain,
+    check_in, check_out, total_amount, advance_amount
+  });
+
   try {
     const result = await executeQuery(`
       INSERT INTO bookings 
       (package_id, accommodation_id, guest_name, guest_email, guest_phone, rooms, adults, children, food_veg, food_nonveg, food_jain, check_in, check_out, total_amount, advance_amount)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `, [package_id, accommodation_id, guest_name, guest_email, guest_phone, rooms, adults, children, food_veg, food_nonveg, food_jain, check_in, check_out, total_amount, advance_amount], req.db);
+    `, [
+      bookingData.package_id,
+      bookingData.accommodation_id,
+      bookingData.guest_name,
+      bookingData.guest_email,
+      bookingData.guest_phone,
+      bookingData.rooms,
+      bookingData.adults,
+      bookingData.children,
+      bookingData.food_veg,
+      bookingData.food_nonveg,
+      bookingData.food_jain,
+      bookingData.check_in,
+      bookingData.check_out,
+      bookingData.total_amount,
+      bookingData.advance_amount
+    ], req.db);
 
     res.json({ success: true, booking_id: result.insertId });
   } catch (error) {
@@ -280,6 +315,7 @@ app.post('/api/bookings', async (req, res) => {
     res.status(500).json({ error: 'Failed to create booking' });
   }
 });
+
 
 app.post('/api/payments/payu', async (req, res) => {
   const { amount, firstname, email, phone, productinfo, booking_id, surl, furl } = req.body;
