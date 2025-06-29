@@ -17,26 +17,56 @@ app.use(cors({
 }));
 app.use(express.json());
 
-// Database configuration
-const dbConfig = {
+// Database pool
+const pool = mysql.createPool({
   host: process.env.DB_HOST || 'in-mum-web1671.main-hosting.eu',
   user: process.env.DB_USER || 'u973488458_plumeria',
   password: process.env.DB_PASSWORD || 'Plumeria_retreat1234',
   database: process.env.DB_NAME || 'u973488458_plumeria',
-  port: parseInt(process.env.DB_PORT || '3306')
-};
-
-// Create database connection pool
-const pool = mysql.createPool({
-  ...dbConfig,
+  port: parseInt(process.env.DB_PORT || '3306'),
   waitForConnections: true,
   connectionLimit: 10,
-  queueLimit: 0
+  queueLimit: 0,
+  namedPlaceholders: true
 });
 
-// Helper function with connection acquire + guaranteed release
-async function executeQuery(query, params = []) {
-  const connection = await pool.getConnection();
+// Optional debug events
+pool.on('acquire', conn => console.log(`[DB] Connection ${conn.threadId} acquired`));
+pool.on('release', conn => console.log(`[DB] Connection ${conn.threadId} released`));
+pool.on('enqueue', () => console.log('[DB] Waiting for available connection...'));
+pool.on('connection', conn => console.log(`[DB] New connection established: ${conn.threadId}`));
+
+// Attach connection per request
+app.use(async (req, res, next) => {
+  let conn;
+  try {
+    conn = await pool.getConnection();
+    req.db = conn;
+    next();
+  } catch (err) {
+    console.error('[DB] Connection error:', err);
+    if (conn) await conn.release().catch(e => console.error('[DB] Release error:', e));
+    res.status(503).json({ error: 'Service unavailable', message: 'Database connection failed' });
+  }
+});
+
+// Release connection after response
+app.use((req, res, next) => {
+  res.on('finish', async () => {
+    if (req.db) {
+      try {
+        await req.db.release();
+      } catch (err) {
+        console.error('[DB] Connection release error:', err);
+      }
+    }
+  });
+  next();
+});
+
+// Helper
+async function executeQuery(query, params = [], conn = null) {
+  const connection = conn || await pool.getConnection();
   try {
     const [results] = await connection.execute(query, params);
     return results;
@@ -44,27 +74,23 @@ async function executeQuery(query, params = []) {
     console.error('Database query error:', error);
     throw error;
   } finally {
-    await connection.release();
+    if (!conn) await connection.release();
   }
 }
 
-// Universal CORS & preflight handler
+// Universal CORS & preflight
 app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
-  if (req.method === 'OPTIONS') {
-    res.status(200).end();
-  } else {
-    next();
-  }
+  if (req.method === 'OPTIONS') res.status(200).end();
+  else next();
 });
 
 // Routes
-
 app.get('/api/nav-items', async (req, res) => {
   try {
-    const results = await executeQuery('SELECT label, path FROM nav_items ORDER BY id');
+    const results = await executeQuery('SELECT label, path FROM nav_items ORDER BY id', [], req.db);
     res.json(results);
-  } catch (error) {
+  } catch {
     res.status(500).json({ error: 'Failed to fetch navigation items' });
   }
 });
@@ -77,16 +103,16 @@ app.get('/api/accommodations', async (req, res) => {
       package_name, package_description, package_images, adult_price, child_price,
       max_guests, created_at, updated_at
       FROM accommodations ORDER BY id
-    `);
+    `, [], req.db);
 
     for (let accommodation of accommodations) {
       const packages = await executeQuery(
         `SELECT * FROM packages WHERE accommodation_id = ? AND active = 1`,
-        [accommodation.id]
+        [accommodation.id],
+        req.db
       );
       accommodation.packages = packages;
     }
-
     res.json(accommodations);
   } catch (error) {
     console.error('Error fetching accommodations:', error);
@@ -105,14 +131,15 @@ app.get('/api/accommodations/:id', async (req, res) => {
       package_name, package_description, package_images, adult_price, child_price,
       max_guests, created_at, updated_at
       FROM accommodations WHERE id = ? LIMIT 1
-    `, [id]);
+    `, [id], req.db);
 
     if (!results.length) return res.status(404).json({ error: 'Accommodation not found' });
 
     const accommodation = results[0];
     const packages = await executeQuery(
       `SELECT * FROM packages WHERE accommodation_id = ? AND active = 1`,
-      [accommodation.id]
+      [accommodation.id],
+      req.db
     );
     accommodation.packages = packages;
 
@@ -123,24 +150,16 @@ app.get('/api/accommodations/:id', async (req, res) => {
   }
 });
 
-// ✅ Updated /api/all-images using executeQuery
 app.get('/api/all-images', async (req, res) => {
   try {
-    const galleryImages = await executeQuery(`SELECT id, src AS url, alt, category, 'gallery' AS source FROM gallery_images`);
-    const accommodations = await executeQuery(`SELECT id, images AS url, name AS alt, type AS category, 'accommodation' AS source FROM accommodations`);
-    const packages = await executeQuery(`SELECT id, image_url AS url, name AS alt, 'package' AS category, 'package' AS source FROM packages`);
-    const activities = await executeQuery(`SELECT id, image AS url, title AS alt, 'activity' AS category, 'activity' AS source FROM activities`);
-    const testimonials = await executeQuery(`SELECT id, image AS url, name AS alt, 'testimonial' AS category, 'testimonial' AS source FROM testimonials`);
-    const nearbyLocations = await executeQuery(`SELECT id, image AS url, name AS alt, 'nearby' AS category, 'nearby' AS source FROM nearby_locations`);
+    const galleryImages = await executeQuery(`SELECT id, src AS url, alt, category, 'gallery' AS source FROM gallery_images`, [], req.db);
+    const accommodations = await executeQuery(`SELECT id, images AS url, name AS alt, type AS category, 'accommodation' AS source FROM accommodations`, [], req.db);
+    const packages = await executeQuery(`SELECT id, image_url AS url, name AS alt, 'package' AS category, 'package' AS source FROM packages`, [], req.db);
+    const activities = await executeQuery(`SELECT id, image AS url, title AS alt, 'activity' AS category, 'activity' AS source FROM activities`, [], req.db);
+    const testimonials = await executeQuery(`SELECT id, image AS url, name AS alt, 'testimonial' AS category, 'testimonial' AS source FROM testimonials`, [], req.db);
+    const nearbyLocations = await executeQuery(`SELECT id, image AS url, name AS alt, 'nearby' AS category, 'nearby' AS source FROM nearby_locations`, [], req.db);
 
-    const allImages = [
-      ...galleryImages,
-      ...accommodations,
-      ...packages,
-      ...activities,
-      ...testimonials,
-      ...nearbyLocations
-    ];
+    const allImages = [...galleryImages, ...accommodations, ...packages, ...activities, ...testimonials, ...nearbyLocations];
     res.json(allImages);
   } catch (err) {
     console.error('Error fetching images:', err);
@@ -148,67 +167,60 @@ app.get('/api/all-images', async (req, res) => {
   }
 });
 
-// Meal Plans
 app.get('/api/meal-plans', async (req, res) => {
   try {
-    const results = await executeQuery(`SELECT id, type, title, description, price, includes FROM meal_plans ORDER BY id`);
+    const results = await executeQuery(`SELECT id, type, title, description, price, includes FROM meal_plans ORDER BY id`, [], req.db);
     res.json(results);
-  } catch (error) {
+  } catch {
     res.status(500).json({ error: 'Failed to fetch meal plans' });
   }
 });
 
-// Activities
 app.get('/api/activities', async (req, res) => {
   try {
-    const results = await executeQuery(`SELECT id, title, description, price, image, duration FROM activities ORDER BY id`);
+    const results = await executeQuery(`SELECT id, title, description, price, image, duration FROM activities ORDER BY id`, [], req.db);
     res.json(results);
-  } catch (error) {
+  } catch {
     res.status(500).json({ error: 'Failed to fetch activities' });
   }
 });
 
-// FAQs
 app.get('/api/faqs', async (req, res) => {
   try {
-    const results = await executeQuery(`SELECT id, question, answer FROM faqs ORDER BY id`);
+    const results = await executeQuery(`SELECT id, question, answer FROM faqs ORDER BY id`, [], req.db);
     res.json(results);
-  } catch (error) {
+  } catch {
     res.status(500).json({ error: 'Failed to fetch FAQs' });
   }
 });
 
-// Gallery Images
 app.get('/api/gallery-images', async (req, res) => {
   try {
-    const results = await executeQuery(`SELECT id, src, alt, category, width, height FROM gallery_images ORDER BY id`);
+    const results = await executeQuery(`SELECT id, src, alt, category, width, height FROM gallery_images ORDER BY id`, [], req.db);
     res.json(results);
-  } catch (error) {
+  } catch {
     res.status(500).json({ error: 'Failed to fetch gallery images' });
   }
 });
 
-// Testimonials
 app.get('/api/testimonials', async (req, res) => {
   try {
-    const results = await executeQuery(`SELECT id, name, location, image, rating, text FROM testimonials ORDER BY id`);
+    const results = await executeQuery(`SELECT id, name, location, image, rating, text FROM testimonials ORDER BY id`, [], req.db);
     res.json(results);
-  } catch (error) {
+  } catch {
     res.status(500).json({ error: 'Failed to fetch testimonials' });
   }
 });
 
-// Nearby Locations
 app.get('/api/nearby-locations', async (req, res) => {
   try {
-    const results = await executeQuery(`SELECT id, name, distance, image, description FROM nearby_locations ORDER BY distance`);
+    const results = await executeQuery(`SELECT id, name, distance, image, description FROM nearby_locations ORDER BY distance`, [], req.db);
     res.json(results);
-  } catch (error) {
+  } catch {
     res.status(500).json({ error: 'Failed to fetch nearby locations' });
   }
 });
 
-// Packages
 app.get('/api/packages', async (req, res) => {
   const accommodationId = parseInt(req.query.accommodation);
   const pkgId = parseInt(req.query.package);
@@ -217,7 +229,8 @@ app.get('/api/packages', async (req, res) => {
     try {
       const [pkg] = await executeQuery(
         `SELECT * FROM packages WHERE id = ? AND accommodation_id = ? AND active = 1 LIMIT 1`,
-        [pkgId, accommodationId]
+        [pkgId, accommodationId],
+        req.db
       );
       if (!pkg) return res.status(404).json({ error: 'Package not found' });
 
@@ -235,7 +248,8 @@ app.get('/api/packages', async (req, res) => {
     const results = await executeQuery(`
       SELECT id, accommodation_id as accommodationId, name, description, price, duration, max_guests as maxGuests, image_url as imageUrl, includes, active, detailed_info as detailedInfo
       FROM packages WHERE active = 1 ORDER BY id
-    `);
+    `, [], req.db);
+
     for (const pkg of results) {
       if (typeof pkg.includes === 'string') try { pkg.includes = JSON.parse(pkg.includes); } catch {}
       if (typeof pkg.detailedInfo === 'string') try { pkg.detailedInfo = JSON.parse(pkg.detailedInfo); } catch {}
@@ -246,7 +260,6 @@ app.get('/api/packages', async (req, res) => {
   }
 });
 
-// Create booking
 app.post('/api/bookings', async (req, res) => {
   const {
     package_id, accommodation_id, guest_name, guest_email, guest_phone,
@@ -258,9 +271,9 @@ app.post('/api/bookings', async (req, res) => {
     const result = await executeQuery(`
       INSERT INTO bookings 
       (package_id, accommodation_id, guest_name, guest_email, guest_phone, rooms, adults, children, food_veg, food_nonveg, food_jain, check_in, check_out, total_amount, advance_amount)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [package_id, accommodation_id, guest_name, guest_email, guest_phone, rooms, adults, children, food_veg, food_nonveg, food_jain, check_in, check_out, total_amount, advance_amount]
-    );
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `, [package_id, accommodation_id, guest_name, guest_email, guest_phone, rooms, adults, children, food_veg, food_nonveg, food_jain, check_in, check_out, total_amount, advance_amount], req.db);
+
     res.json({ success: true, booking_id: result.insertId });
   } catch (error) {
     console.error('Error creating booking:', error);
@@ -268,7 +281,6 @@ app.post('/api/bookings', async (req, res) => {
   }
 });
 
-// PayU payment
 app.post('/api/payments/payu', async (req, res) => {
   const { amount, firstname, email, phone, productinfo, booking_id, surl, furl } = req.body;
 
@@ -304,10 +316,24 @@ app.post('/api/payments/payu', async (req, res) => {
   });
 });
 
-// Health check
 app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', timestamp: new Date().toISOString() });
 });
+
+// Graceful shutdown
+const shutdown = async () => {
+  console.log('\n[Shutdown] Closing database pool...');
+  try {
+    await pool.end();
+    console.log('[Shutdown] Database pool closed successfully');
+    process.exit(0);
+  } catch (err) {
+    console.error('[Shutdown] Error closing pool:', err);
+    process.exit(1);
+  }
+};
+process.on('SIGINT', shutdown);
+process.on('SIGTERM', shutdown);
 
 // Start server
 app.listen(PORT, () => {
