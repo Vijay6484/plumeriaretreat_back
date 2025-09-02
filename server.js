@@ -8,7 +8,7 @@ dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const HOST = 127.0.0.1;
+const HOST = '127.0.0.1';
 
 // Middleware
 app.use(cors({
